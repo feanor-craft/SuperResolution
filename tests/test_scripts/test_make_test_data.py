@@ -1,7 +1,7 @@
 """Test scripts/make_test_data.py — test-data preparation for SR evaluation.
 
 README states:
-- Case 1 & 2 (SR applied): centre-crop 640x480 around object centre from FHD frame.
+- Case 1 & 2 (SR applied): center-crop 640x480 around object center from FHD frame.
   Crop is then fed to SPAN x2 SR → 1280x960 for object detection.
 - Case 3 (baseline): FHD original (1920x1080) passed as-is to object detection.
 - Bounding-box labels are transformed to the cropped coordinate space (YOLO format).
@@ -34,7 +34,7 @@ from make_test_data import (  # noqa: E402
 # ---------------------------------------------------------------------------
 
 def test_crop_dimensions_match_readme():
-    """README specifies 640x480 centre-crop; constants must reflect this."""
+    """README specifies 640x480 center-crop; constants must reflect this."""
     assert CROP_W == 640
     assert CROP_H == 480
 
@@ -52,7 +52,7 @@ def test_fhd_dimensions_match_readme():
 def test_load_labels_yolo(tmp_path):
     """YOLO normalised format (cls cx cy w h) is parsed into absolute pixel coords."""
     label_file = tmp_path / 'frame.txt'
-    # One object at the centre of FHD frame, 10% width/height
+    # One object at the center of FHD frame, 10% width/height
     label_file.write_text('0 0.5 0.5 0.1 0.1\n')
 
     labels = load_labels(str(label_file))
@@ -107,7 +107,7 @@ def test_load_labels_json_list(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_get_object_center_single_box():
-    """Centre is the midpoint of the single bounding box."""
+    """Center is the midpoint of the single bounding box."""
     labels = [{'class_id': 0, 'bbox': [100, 200, 300, 400]}]
     cx, cy = get_object_center(labels)
     assert cx == 200   # (100+300)/2
@@ -115,10 +115,10 @@ def test_get_object_center_single_box():
 
 
 def test_get_object_center_multiple_boxes():
-    """Centre is the mean of each box's midpoint."""
+    """Center is the mean of each box's midpoint."""
     labels = [
-        {'class_id': 0, 'bbox': [0, 0, 100, 100]},   # centre (50, 50)
-        {'class_id': 0, 'bbox': [100, 100, 300, 300]},  # centre (200, 200)
+        {'class_id': 0, 'bbox': [0, 0, 100, 100]},   # center (50, 50)
+        {'class_id': 0, 'bbox': [100, 100, 300, 300]},  # center (200, 200)
     ]
     cx, cy = get_object_center(labels)
     assert cx == int((50 + 200) / 2)   # 125
@@ -126,7 +126,7 @@ def test_get_object_center_multiple_boxes():
 
 
 def test_get_object_center_no_labels():
-    """When no labels exist the function falls back to image centre (FHD)."""
+    """When no labels exist the function falls back to image center (FHD)."""
     cx, cy = get_object_center([])
     assert cx == FHD_W // 2
     assert cy == FHD_H // 2
@@ -136,8 +136,8 @@ def test_get_object_center_no_labels():
 # compute_crop_region
 # ---------------------------------------------------------------------------
 
-def test_compute_crop_region_centre():
-    """Crop centred on object at image centre stays inside boundaries."""
+def test_compute_crop_region_center():
+    """Crop centerd on object at image center stays inside boundaries."""
     cx, cy = FHD_W // 2, FHD_H // 2
     x1, y1, x2, y2 = compute_crop_region(cx, cy, CROP_W, CROP_H, FHD_W, FHD_H)
     assert x2 - x1 == CROP_W
@@ -184,7 +184,7 @@ def test_transform_labels_box_fully_inside():
                               crop_w=CROP_W, crop_h=CROP_H)
     assert len(result) == 1
     ncx, ncy, nw, nh = result[0]['bbox_norm']
-    # Verify centre is within [0,1]
+    # Verify center is within [0,1]
     assert 0 < ncx < 1
     assert 0 < ncy < 1
     assert 0 < nw <= 1
@@ -232,7 +232,7 @@ def _make_fhd_image(path):
 
 
 def test_process_case_crop_output_size(tmp_path):
-    """Centre-cropped image must be exactly 640x480 (CROP_W x CROP_H)."""
+    """Center-cropped image must be exactly 640x480 (CROP_W x CROP_H)."""
     input_dir = tmp_path / 'input'
     label_dir = tmp_path / 'labels'
     out_img   = tmp_path / 'out' / 'images'
@@ -240,7 +240,7 @@ def test_process_case_crop_output_size(tmp_path):
     input_dir.mkdir(); label_dir.mkdir()
 
     _make_fhd_image(input_dir / 'frame001.png')
-    # label: object at FHD centre
+    # label: object at FHD center
     (label_dir / 'frame001.txt').write_text('0 0.5 0.5 0.1 0.1\n')
 
     process_case_crop(str(input_dir), str(label_dir),

@@ -1,7 +1,7 @@
 """Test SPAN x2 architecture as described in README.
 
 README states:
-- SPAN x2 upscales 640x480 centre-crops to 1280x960 for object detection.
+- SPAN x2 upscales 640x480 center-crops to 1280x960 for object detection.
 - Network config: num_in_ch=3, num_out_ch=3, feature_channels=48,
   upscale=2, bias=True, img_range=255., rgb_mean=[0.4488, 0.4371, 0.4040]
 """
@@ -49,7 +49,7 @@ def test_span_x2_output_shape_small():
 
 
 def test_span_x2_output_shape_readme_usecase():
-    """README use-case: 640x480 centre-crop → 1280x960 after SPAN x2."""
+    """README use-case: 640x480 center-crop → 1280x960 after SPAN x2."""
     model = _make_model()
     # Use a smaller proxy (divided by 16) to keep test fast on CPU
     x = torch.rand(1, 3, 30, 40)   # proxy for 480x640 (H x W) / 16
