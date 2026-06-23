@@ -223,15 +223,21 @@ SR 결과 이미지: `results/test_SPAN_x2_finetuned/Maritime/`
 
 파인튜닝된 모델로 FHD 영상 프레임에 SR을 적용하는 **전체 추론 파이프라인**입니다.
 
+| 스크립트 | 경로 | 역할 |
+|---------|------|------|
+| 크롭 추출 | `scripts/make_test_data.py` | FHD → 640×480 센터크롭 + 라벨 변환 |
+| **SR 추론** | **`scripts/apply_sr.py`** | 640×480 이미지 디렉토리 → 1280×960 일괄 변환 |
+
 ### Step 1: FHD 영상에서 640×480 센터크롭 추출
 
+라벨링된 데이터(이미지 + 바운딩박스 라벨)를 경로로 전달합니다.
 FHD(1920×1080) 프레임에서 객체 중심으로 640×480을 잘라내고,
 바운딩박스 라벨도 크롭 좌표로 변환합니다.
 
 ```bash
 python scripts/make_test_data.py \
-    --input_dir  path/to/fhd_frames \
-    --label_dir  path/to/labels \
+    --input_dir  path/to/fhd_frames \   # 전달받은 FHD 이미지 경로
+    --label_dir  path/to/labels \       # 전달받은 라벨 경로 (YOLO txt 또는 JSON)
     --output_dir test_data/case1_crop \
     --case crop
 ```
