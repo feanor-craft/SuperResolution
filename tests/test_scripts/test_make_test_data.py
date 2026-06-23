@@ -137,7 +137,7 @@ def test_get_object_center_no_labels():
 # ---------------------------------------------------------------------------
 
 def test_compute_crop_region_center():
-    """Crop centerd on object at image center stays inside boundaries."""
+    """Crop centered on object at image center stays inside boundaries."""
     cx, cy = FHD_W // 2, FHD_H // 2
     x1, y1, x2, y2 = compute_crop_region(cx, cy, CROP_W, CROP_H, FHD_W, FHD_H)
     assert x2 - x1 == CROP_W
