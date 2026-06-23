@@ -1,0 +1,98 @@
+# Smoke test config: 2 domains, 20 iterations, GPU
+name: SPAN_x2_smoketest
+model_type: SRModel
+scale: 2
+num_gpu: 1
+manual_seed: 42
+
+datasets:
+  train:
+    name: SmokeTestDataset
+    type: PairedImageDataset
+    dataroot_gt:
+      - datasets/domain_maritime/HR
+      - datasets/domain_ground/HR
+    dataroot_lq:
+      - datasets/domain_maritime/LR/X2
+      - datasets/domain_ground/LR/X2
+    io_backend:
+      type: disk
+
+    gt_size: 128
+    use_hflip: true
+    use_rot: true
+
+    num_worker_per_gpu: 0
+    batch_size_per_gpu: 2
+    dataset_enlarge_ratio: 1
+    prefetch_mode: ~
+
+  val:
+    name: Maritime_val
+    type: PairedImageDataset
+    dataroot_gt: datasets/domain_maritime/HR
+    dataroot_lq: datasets/domain_maritime/LR/X2
+    io_backend:
+      type: disk
+
+network_g:
+  type: SPAN
+  num_in_ch: 3
+  num_out_ch: 3
+  feature_channels: 48
+  upscale: 2
+  bias: true
+  img_range: 255.
+  rgb_mean: [0.4488, 0.4371, 0.4040]
+
+path:
+  pretrain_network_g: ~
+  strict_load_g: true
+  resume_state: ~
+
+train:
+  ema_decay: 0.999
+  optim_g:
+    type: Adam
+    lr: !!float 2e-5
+    weight_decay: 0
+    betas: [0.9, 0.99]
+
+  scheduler:
+    type: MultiStepLR
+    milestones: [50000]
+    gamma: 0.5
+
+  total_iter: 20
+  warmup_iter: -1
+
+  pixel_opt:
+    type: L1Loss
+    loss_weight: 1.0
+    reduction: mean
+
+val:
+  val_freq: 10
+  save_img: false
+
+  metrics:
+    psnr:
+      type: calculate_psnr
+      crop_border: 2
+      test_y_channel: false
+    ssim:
+      type: calculate_ssim
+      crop_border: 2
+      test_y_channel: false
+
+logger:
+  print_freq: 5
+  save_checkpoint_freq: 20
+  use_tb_logger: false
+  wandb:
+    project: ~
+    resume_id: ~
+
+dist_params:
+  backend: nccl
+  port: 29500

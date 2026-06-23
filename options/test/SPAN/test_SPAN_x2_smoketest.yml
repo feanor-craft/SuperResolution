@@ -1,0 +1,51 @@
+# Smoke test config for testing
+name: test_SPAN_x2_smoketest
+model_type: SRModel
+scale: 2
+num_gpu: 1
+manual_seed: 0
+
+datasets:
+  test_maritime:
+    name: Maritime
+    type: PairedImageDataset
+    dataroot_gt: datasets/domain_maritime/HR
+    dataroot_lq: datasets/domain_maritime/LR/X2
+    io_backend:
+      type: disk
+
+  test_ground:
+    name: Ground
+    type: PairedImageDataset
+    dataroot_gt: datasets/domain_ground/HR
+    dataroot_lq: datasets/domain_ground/LR/X2
+    io_backend:
+      type: disk
+
+network_g:
+  type: SPAN
+  num_in_ch: 3
+  num_out_ch: 3
+  feature_channels: 48
+  upscale: 2
+  bias: true
+  img_range: 255.
+  rgb_mean: [0.4488, 0.4371, 0.4040]
+
+path:
+  pretrain_network_g: experiments/SPAN_x2_smoketest/models/net_g_20.pth
+  strict_load_g: true
+
+val:
+  save_img: true
+  suffix: ~
+
+  metrics:
+    psnr:
+      type: calculate_psnr
+      crop_border: 2
+      test_y_channel: false
+    ssim:
+      type: calculate_ssim
+      crop_border: 2
+      test_y_channel: false
