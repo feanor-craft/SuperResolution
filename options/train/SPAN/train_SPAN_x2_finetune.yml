@@ -11,7 +11,7 @@ datasets:
   train:
     name: MixedDomainDataset
     type: PairedImageDataset
-    # Use multiple dataset paths via meta_info_file
+    # Multi-folder mode: lists of GT and LQ folders scanned in order
     dataroot_gt:
       - datasets/domain_maritime/HR
       - datasets/domain_ground/HR
@@ -24,7 +24,6 @@ datasets:
       - datasets/domain_air2ground/LR/X2
       - datasets/domain_ground2air/LR/X2
       - datasets/DIV2K/DIV2K_train_LR_bicubic/X2
-    meta_info_file: datasets/meta_info/meta_info_mixed_x2.txt
     io_backend:
       type: disk
 
