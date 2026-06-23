@@ -228,16 +228,30 @@ SR 결과 이미지: `results/test_SPAN_x2_finetuned/Maritime/`
 | 크롭 추출 | `scripts/make_test_data.py` | FHD → 640×480 센터크롭 + 라벨 변환 |
 | **SR 추론** | **`scripts/apply_sr.py`** | 640×480 이미지 디렉토리 → 1280×960 일괄 변환 |
 
+> **참고**: `test_data/` 폴더는 `.gitignore`에 등록되어 있어 Git에 업로드되지 않습니다.
+> 전달받은 테스트 데이터는 아래 구조로 배치한 후 경로를 스크립트에 전달합니다.
+
+### 전달받은 라벨링 데이터 배치
+
+외부에서 전달받은 FHD 프레임 + 바운딩박스 라벨을 아래 경로에 배치합니다:
+
+```
+test_data/
+└── raw/
+    ├── images/    ← 전달받은 FHD(1920×1080) 이미지 파일들
+    └── labels/    ← 전달받은 YOLO txt 라벨 파일들 (이미지와 파일명 일치)
+```
+
 ### Step 1: FHD 영상에서 640×480 센터크롭 추출
 
-라벨링된 데이터(이미지 + 바운딩박스 라벨)를 경로로 전달합니다.
+배치한 `test_data/raw/`를 입력 경로로 지정합니다.
 FHD(1920×1080) 프레임에서 객체 중심으로 640×480을 잘라내고,
 바운딩박스 라벨도 크롭 좌표로 변환합니다.
 
 ```bash
 python scripts/make_test_data.py \
-    --input_dir  path/to/fhd_frames \   # 전달받은 FHD 이미지 경로
-    --label_dir  path/to/labels \       # 전달받은 라벨 경로 (YOLO txt 또는 JSON)
+    --input_dir  test_data/raw/images \
+    --label_dir  test_data/raw/labels \
     --output_dir test_data/case1_crop \
     --case crop
 ```
@@ -287,8 +301,8 @@ python scripts/apply_sr.py \
 Case 3 (베이스라인):
 ```bash
 python scripts/make_test_data.py \
-    --input_dir  path/to/fhd_frames \
-    --label_dir  path/to/labels \
+    --input_dir  test_data/raw/images \
+    --label_dir  test_data/raw/labels \
     --output_dir test_data/case3_baseline \
     --case baseline
 ```
@@ -374,7 +388,7 @@ python basicsr/test.py -opt options/test/SPAN/test_SPAN_x2.yml
 
 # 6. 실제 영상에 SR 적용 (640×480 → 1280×960)
 python scripts/make_test_data.py \
-    --input_dir path/to/fhd_frames --label_dir path/to/labels \
+    --input_dir test_data/raw/images --label_dir test_data/raw/labels \
     --output_dir test_data/case1_crop --case crop
 
 python scripts/apply_sr.py \
@@ -687,8 +701,8 @@ FHD 비디오 프레임에서 객체검출 평가용 테스트 데이터를 생�
 
 ```bash
 python scripts/make_test_data.py \
-    --input_dir path/to/fhd_frames \
-    --label_dir path/to/labels \
+    --input_dir test_data/raw/images \
+    --label_dir test_data/raw/labels \
     --output_dir test_data/case1_crop \
     --case crop
 ```
@@ -697,8 +711,8 @@ python scripts/make_test_data.py \
 
 ```bash
 python scripts/make_test_data.py \
-    --input_dir path/to/fhd_frames \
-    --label_dir path/to/labels \
+    --input_dir test_data/raw/images \
+    --label_dir test_data/raw/labels \
     --output_dir test_data/case3_baseline \
     --case baseline
 ```
