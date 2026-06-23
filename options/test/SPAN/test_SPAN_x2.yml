@@ -1,0 +1,81 @@
+# SPAN x2 Test Configuration
+# Test fine-tuned SPAN x2 on custom domain datasets and DIV2K
+name: test_SPAN_x2_finetuned
+model_type: SRModel
+scale: 2
+num_gpu: 1
+manual_seed: 0
+
+datasets:
+  # Case 1: Custom domain datasets
+  test_maritime:
+    name: Maritime
+    type: PairedImageDataset
+    dataroot_gt: datasets/domain_maritime/HR
+    dataroot_lq: datasets/domain_maritime/LR/X2
+    io_backend:
+      type: disk
+
+  test_ground:
+    name: Ground
+    type: PairedImageDataset
+    dataroot_gt: datasets/domain_ground/HR
+    dataroot_lq: datasets/domain_ground/LR/X2
+    io_backend:
+      type: disk
+
+  test_air2ground:
+    name: Air2Ground
+    type: PairedImageDataset
+    dataroot_gt: datasets/domain_air2ground/HR
+    dataroot_lq: datasets/domain_air2ground/LR/X2
+    io_backend:
+      type: disk
+
+  test_ground2air:
+    name: Ground2Air
+    type: PairedImageDataset
+    dataroot_gt: datasets/domain_ground2air/HR
+    dataroot_lq: datasets/domain_ground2air/LR/X2
+    io_backend:
+      type: disk
+
+  # Case 2: DIV2K dataset
+  test_div2k:
+    name: DIV2K
+    type: PairedImageDataset
+    dataroot_gt: datasets/DIV2K/DIV2K_train_HR
+    dataroot_lq: datasets/DIV2K/DIV2K_train_LR_bicubic/X2
+    io_backend:
+      type: disk
+
+# network structures
+network_g:
+  type: SPAN
+  num_in_ch: 3
+  num_out_ch: 3
+  feature_channels: 48
+  upscale: 2
+  bias: true
+  img_range: 255.
+  rgb_mean: [0.4488, 0.4371, 0.4040]
+
+# path
+path:
+  pretrain_network_g: experiments/pretrained_models/SPAN_x2_finetuned.pth
+  strict_load_g: true
+
+# validation settings
+val:
+  save_img: true
+  suffix: ~
+
+  metrics:
+    psnr:
+      type: calculate_psnr
+      crop_border: 2
+      test_y_channel: false
+    ssim:
+      type: calculate_ssim
+      crop_border: 2
+      test_y_channel: false
