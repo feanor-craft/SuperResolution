@@ -1,7 +1,383 @@
 # SPAN x2 Super-Resolution — 학습 및 테스트 매뉴얼
 
-> 이 문서는 SPAN x2 모델의 **환경 설정 → 데이터 준비 → Fine-tuning 학습 → 테스트 → 결과 확인**
-> 전 과정을 단계별로 설명합니다.
+> **목표**: FHD(1920×1080) 영상에서 객체 중심 640×480 센터크롭을 SPAN x2 SR로 1280×960으로
+> 업스케일하여 객체검출 모델의 입력 품질을 향상시킵니다.
+>
+> 사전학습된 SPAN x2 모델을 도메인 특화 데이터로 파인튜닝하고,
+> 파인튜닝된 모델로 실제 영상 프레임에 SR을 적용합니다.
+
+```
+전체 파이프라인 요약:
+
+[FHD 영상 프레임]
+       │
+       ▼ make_test_data.py --case crop
+[640×480 센터크롭 + 라벨 변환]
+       │
+       ▼ apply_sr.py  (파인튜닝된 SPAN x2 사용)
+[1280×960 SR 결과]
+       │
+       ▼
+[객체검출 모델 입력]
+```
+
+---
+
+## 목차
+
+1. [환경 설정](#1-환경-설정)
+2. [데이터셋 준비 (파인튜닝용)](#2-데이터셋-준비-파인튜닝용)
+3. [Pretrained 모델 배치](#3-pretrained-모델-배치)
+4. [LR 이미지 생성](#4-lr-이미지-생성)
+5. [Fine-tuning 학습](#5-fine-tuning-학습)
+6. [모델 품질 평가 (PSNR/SSIM)](#6-모델-품질-평가-psnrssim)
+7. [실제 영상에 SR 적용 (640×480 → 1280×960)](#7-실제-영상에-sr-적용-640480--1280960)
+8. [학습 재개 (Resume)](#8-학습-재개-resume)
+9. [설정 파일 주요 파라미터](#9-설정-파일-주요-파라미터)
+10. [자주 발생하는 오류 및 해결법](#10-자주-발생하는-오류-및-해결법)
+
+---
+
+## 1. 환경 설정
+
+### 요구 사항
+
+| 항목 | 버전 |
+|------|------|
+| Python | 3.10 이상 (3.11 권장) |
+| PyTorch | 2.1 이상 |
+| CUDA | 12.1 이상 |
+
+### 설치
+
+```bash
+# uv 사용 시
+uv venv .venv --python 3.11
+source .venv/Scripts/activate          # Windows
+# source .venv/bin/activate            # Linux/Mac
+
+uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+uv pip install "numpy<2"
+uv pip install -r requirements.txt
+BASICSR_EXT=False python setup.py develop
+```
+
+설치 확인:
+
+```bash
+python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+python -c "import basicsr; print('BasicSR OK')"
+```
+
+---
+
+## 2. 데이터셋 준비 (파인튜닝용)
+
+파인튜닝에는 SR로 복원하고자 하는 도메인과 유사한 **고해상도(HR) 이미지**가 필요합니다.
+
+> **핵심 개념**: SR 모델은 (LR, HR) 쌍으로 학습합니다.
+> LR은 HR을 bicubic x2 다운샘플링하여 자동 생성합니다.
+> 실제 640×480 프레임을 학습에 직접 사용하는 것이 아니라,
+> 도메인 대표 HR 이미지를 수집하여 학습합니다.
+
+```
+datasets/
+├── domain_maritime/
+│   └── HR/          ← 해양 도메인 HR 이미지 (권장: 800장 이상)
+├── domain_ground/
+│   └── HR/
+├── domain_air2ground/
+│   └── HR/
+├── domain_ground2air/
+│   └── HR/
+└── DIV2K/
+    └── DIV2K_train_HR/   ← 범용 SR 데이터 (선택, 800장)
+```
+
+- HR 이미지: 최소 256×256 이상, 실제 도메인 촬영 이미지 사용 권장
+- LR 이미지(`LR/X2/`)는 다음 단계에서 자동 생성됩니다
+
+---
+
+## 3. Pretrained 모델 배치
+
+파인튜닝 시작점인 SPAN x2 공개 사전학습 가중치를 배치합니다.
+
+```
+experiments/
+└── pretrained_models/
+    └── SPAN_x2_pretrained.pth    ← SPAN 공식 레포에서 다운로드
+```
+
+SPAN GitHub: https://github.com/hongyuanyu/SPAN (Releases 또는 Google Drive)
+
+```bash
+mkdir -p experiments/pretrained_models
+mv SPAN_x2_pretrained.pth experiments/pretrained_models/
+```
+
+---
+
+## 4. LR 이미지 생성
+
+HR 이미지를 bicubic x2 다운샘플링하여 학습용 LR 이미지를 합성합니다.
+
+```bash
+# 전체 도메인
+python scripts/make_lr.py
+
+# 특정 도메인만
+python scripts/make_lr.py --domains domain_maritime DIV2K
+```
+
+---
+
+## 5. Fine-tuning 학습
+
+사전학습 모델을 도메인 특화 데이터로 파인튜닝합니다.
+
+### 설정 파일: `options/train/SPAN/train_SPAN_x2_finetune.yml`
+
+```yaml
+path:
+  pretrain_network_g: experiments/pretrained_models/SPAN_x2_pretrained.pth  # 사전학습 모델
+
+datasets:
+  train:
+    dataroot_gt:             # HR 폴더 목록 (도메인 순서대로)
+      - datasets/domain_maritime/HR
+      - datasets/domain_ground/HR
+      - datasets/domain_air2ground/HR
+      - datasets/domain_ground2air/HR
+      - datasets/DIV2K/DIV2K_train_HR
+    dataroot_lq:             # LR 폴더 목록 (위와 순서 일치)
+      - datasets/domain_maritime/LR/X2
+      - datasets/domain_ground/LR/X2
+      - datasets/domain_air2ground/LR/X2
+      - datasets/domain_ground2air/LR/X2
+      - datasets/DIV2K/DIV2K_train_LR_bicubic/X2
+
+train:
+  total_iter: 100000
+  optim_g:
+    lr: !!float 2e-5    # 파인튜닝용 낮은 학습률
+```
+
+### 학습 실행
+
+```bash
+python basicsr/train.py -opt options/train/SPAN/train_SPAN_x2_finetune.yml
+```
+
+### 학습 출력
+
+```
+experiments/SPAN_x2_finetune_custom_DIV2K/
+├── models/
+│   ├── net_g_10000.pth
+│   ├── net_g_20000.pth   ← 파인튜닝된 체크포인트
+│   └── net_g_100000.pth
+├── training_states/      ← Resume용
+└── log/
+```
+
+### 학습 모니터링
+
+```bash
+tensorboard --logdir tb_logger/SPAN_x2_finetune_custom_DIV2K
+# http://localhost:6006
+```
+
+---
+
+## 6. 모델 품질 평가 (PSNR/SSIM)
+
+파인튜닝된 모델의 SR 품질을 도메인별로 정량 평가합니다.
+
+### 설정 파일 수정: `options/test/SPAN/test_SPAN_x2.yml`
+
+```yaml
+path:
+  pretrain_network_g: experiments/SPAN_x2_finetune_custom_DIV2K/models/net_g_100000.pth
+```
+
+### 실행
+
+```bash
+python basicsr/test.py -opt options/test/SPAN/test_SPAN_x2.yml
+```
+
+### 결과 확인
+
+```
+Validation Maritime
+     # psnr: 32.45    Best: 32.45 @ 100000 iter
+     # ssim: 0.9012   Best: 0.9012 @ 100000 iter
+```
+
+SR 결과 이미지: `results/test_SPAN_x2_finetuned/Maritime/`
+
+---
+
+## 7. 실제 영상에 SR 적용 (640×480 → 1280×960)
+
+파인튜닝된 모델로 FHD 영상 프레임에 SR을 적용하는 **전체 추론 파이프라인**입니다.
+
+### Step 1: FHD 영상에서 640×480 센터크롭 추출
+
+FHD(1920×1080) 프레임에서 객체 중심으로 640×480을 잘라내고,
+바운딩박스 라벨도 크롭 좌표로 변환합니다.
+
+```bash
+python scripts/make_test_data.py \
+    --input_dir  path/to/fhd_frames \
+    --label_dir  path/to/labels \
+    --output_dir test_data/case1_crop \
+    --case crop
+```
+
+출력:
+```
+test_data/case1_crop/
+├── images/    ← 640×480 센터크롭 이미지
+└── labels/    ← 크롭 좌표 기준 YOLO 라벨
+```
+
+### Step 2: 파인튜닝 모델로 SR 적용 (640×480 → 1280×960)
+
+```bash
+python scripts/apply_sr.py \
+    --input_dir  test_data/case1_crop/images \
+    --output_dir test_data/case1_sr/images \
+    --model_path experiments/SPAN_x2_finetune_custom_DIV2K/models/net_g_100000.pth \
+    --device cuda
+```
+
+출력:
+```
+test_data/case1_sr/images/   ← 1280×960 SR 결과
+```
+
+> **라벨 호환성**: SR 적용 후 이미지가 2배 커지므로 라벨의 정규화 좌표(cx, cy, w, h)는
+> 그대로 유효합니다. `test_data/case1_crop/labels/`를 그대로 사용하면 됩니다.
+
+### 케이스별 비교
+
+| Case | 스크립트 | 입력 | SR | 검출 입력 |
+|------|---------|------|-----|---------|
+| Case 1 | make_test_data.py + apply_sr.py | 640×480 크롭 | 파인튜닝 모델 | 1280×960 |
+| Case 2 | make_test_data.py + apply_sr.py | 640×480 크롭 | 사전학습 모델만 | 1280×960 |
+| Case 3 | make_test_data.py --case baseline | FHD 원본 | 미적용 | 1920×1080 |
+
+Case 2 (사전학습만 사용):
+```bash
+python scripts/apply_sr.py \
+    --input_dir  test_data/case1_crop/images \
+    --output_dir test_data/case2_sr/images \
+    --model_path experiments/pretrained_models/SPAN_x2_pretrained.pth \
+    --device cuda
+```
+
+Case 3 (베이스라인):
+```bash
+python scripts/make_test_data.py \
+    --input_dir  path/to/fhd_frames \
+    --label_dir  path/to/labels \
+    --output_dir test_data/case3_baseline \
+    --case baseline
+```
+
+---
+
+## 8. 학습 재개 (Resume)
+
+```yaml
+# train yml에 추가
+auto_resume: true
+```
+
+또는 특정 checkpoint:
+
+```yaml
+path:
+  resume_state: experiments/SPAN_x2_finetune_custom_DIV2K/training_states/50000.state
+```
+
+---
+
+## 9. 설정 파일 주요 파라미터
+
+| 파라미터 | 기본값 | 설명 |
+|----------|--------|------|
+| `gt_size` | 128 | 학습 패치 크기 (GT 기준, LQ = 64) |
+| `batch_size_per_gpu` | 16 | GPU당 배치 크기 |
+| `dataset_enlarge_ratio` | 100 | 에포크당 데이터 반복 배수 |
+| `total_iter` | 100000 | 전체 학습 반복 수 |
+| `lr` | 2e-5 | 파인튜닝 학습률 |
+| `milestones` | [50000] | LR 절반 감소 시점 |
+| `val_freq` | 5000 | 검증 주기 |
+| `save_checkpoint_freq` | 10000 | 체크포인트 저장 주기 |
+
+---
+
+## 10. 자주 발생하는 오류 및 해결법
+
+### `ModuleNotFoundError: No module named 'basicsr'`
+
+```bash
+BASICSR_EXT=False python setup.py develop
+```
+
+### `FileNotFoundError: SPAN_x2_pretrained.pth`
+
+Section 3을 참고하여 `experiments/pretrained_models/`에 파일을 배치하세요.
+
+### `AssertionError: lq and gt datasets have different number of images`
+
+```bash
+python scripts/make_lr.py --domains domain_maritime  # LR 재생성
+```
+
+### `CUDA out of memory`
+
+```yaml
+batch_size_per_gpu: 8   # 16에서 줄이기
+```
+
+---
+
+## 빠른 시작 요약
+
+```bash
+# 1. 환경 설치
+uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+uv pip install "numpy<2" -r requirements.txt
+BASICSR_EXT=False python setup.py develop
+
+# 2. 도메인 HR 이미지 준비 후 LR 생성
+python scripts/make_lr.py
+
+# 3. 사전학습 모델 배치
+#    → experiments/pretrained_models/SPAN_x2_pretrained.pth
+
+# 4. 파인튜닝 학습
+python basicsr/train.py -opt options/train/SPAN/train_SPAN_x2_finetune.yml
+
+# 5. (선택) 품질 평가
+python basicsr/test.py -opt options/test/SPAN/test_SPAN_x2.yml
+
+# 6. 실제 영상에 SR 적용 (640×480 → 1280×960)
+python scripts/make_test_data.py \
+    --input_dir path/to/fhd_frames --label_dir path/to/labels \
+    --output_dir test_data/case1_crop --case crop
+
+python scripts/apply_sr.py \
+    --input_dir  test_data/case1_crop/images \
+    --output_dir test_data/case1_sr/images \
+    --model_path experiments/SPAN_x2_finetune_custom_DIV2K/models/net_g_100000.pth \
+    --device cuda
+```
+
 
 ---
 
