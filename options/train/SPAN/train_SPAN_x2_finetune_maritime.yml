@@ -1,6 +1,5 @@
-# SPAN x2 Fine-tuning Configuration
-# Fine-tune pretrained SPAN x2 on custom domain + DIV2K mixed dataset
-name: SPAN_x2_finetune_custom_DIV2K
+# SPAN x2 Fine-tuning Configuration — Maritime domain only
+name: SPAN_x2_finetune_maritime
 model_type: SRModel
 scale: 2
 num_gpu: 1
@@ -9,21 +8,10 @@ manual_seed: 42
 # dataset and data loader settings
 datasets:
   train:
-    name: MixedDomainDataset
+    name: MaritimeDataset
     type: PairedImageDataset
-    # Multi-folder mode: lists of GT and LQ folders scanned in order
-    dataroot_gt:
-      - datasets/domain_maritime/HR
-      - datasets/domain_ground/HR
-      - datasets/domain_air2ground/HR
-      - datasets/domain_ground2air/HR
-      - datasets/DIV2K/DIV2K_train_HR
-    dataroot_lq:
-      - datasets/domain_maritime/LR/X2
-      - datasets/domain_ground/LR/X2
-      - datasets/domain_air2ground/LR/X2
-      - datasets/domain_ground2air/LR/X2
-      - datasets/DIV2K/DIV2K_train_LR_bicubic/X2
+    dataroot_gt: datasets/domain_maritime/HR
+    dataroot_lq: datasets/domain_maritime/LR/X2
     io_backend:
       type: disk
 
