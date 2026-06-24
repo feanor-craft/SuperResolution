@@ -75,6 +75,11 @@ python basicsr/train.py -opt options/train/SPAN/train_SPAN_x2_finetune.yml
 | Scheduler | MultiStepLR (milestone: 50000, gamma: 0.5) |
 | Loss | L1Loss |
 | Batch Size | 16 |
+| EMA Decay | 0.999 |
+
+> **EMA (Exponential Moving Average):** 매 iteration마다 `EMA_weight = 0.999 × EMA_weight + 0.001 × current_weight` 수식으로 별도의 EMA 가중치(`net_g_ema`)를 유지합니다.
+> 학습 중 파라미터 진동을 평탄화해 더 안정적인 추론 품질을 제공합니다.
+> 체크포인트에는 일반 가중치(`params`)와 EMA 가중치(`params_ema`) 두 가지가 함께 저장되며, 추론 시에는 `params_ema`를 우선 사용합니다.
 
 ### 3. 테스트
 
@@ -111,6 +116,20 @@ python scripts/make_test_data.py \
 ```
 
 FHD 원본 1920x1080을 그대로 객체검출 모델에 입력합니다.
+
+### 5. SR 배치 적용
+
+Fine-tuned 모델로 640x480 크롭 이미지에 SR을 일괄 적용하여 1280x960 결과물을 생성합니다.
+
+```bash
+python scripts/apply_sr.py \
+    --input_dir  test_data/case1_crop/images \
+    --output_dir test_data/case1_sr/images \
+    --model_path experiments/SPAN_x2_finetune_custom_DIV2K/models/net_g_100000.pth
+```
+
+- 체크포인트에서 `params_ema`(EMA 가중치)를 우선 로드하며, 없으면 `params`로 폴백합니다.
+- `--device cpu` 옵션으로 CPU 추론도 가능합니다.
 
 ## 테스트 케이스 요약
 
@@ -161,7 +180,8 @@ SuperResolution/
 │   └── test/SPAN/            # 테스트 설정
 ├── scripts/
 │   ├── make_lr.py            # LR 합성 스크립트
-│   └── make_test_data.py     # 테스트 데이터 준비
+│   ├── make_test_data.py     # 테스트 데이터 준비
+│   └── apply_sr.py           # 배치 SR 추론 스크립트
 ├── experiments/
 │   └── pretrained_models/    # Pretrained weights
 └── datasets/                 # 데이터셋 (gitignore)
